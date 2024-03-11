@@ -123,6 +123,13 @@ public class ServerInfoController extends BaseController {
     @PreAuthorize("@ss.hasPermi('server:serverlist:refresh')")
     @GetMapping("/refreshCache")
     public AjaxResult refreshCache() {
+        // 刷新缓存前释放Rcon连接
+        MapCache.getMap().forEach((k, v) -> {
+            try {
+                v.close();
+            } catch (Exception ignored) {
+            }
+        });
         // 服务器信息缓存
         redisCache.setCacheObject("serverInfo", serverInfoService.selectServerInfoList(new ServerInfo()), 1, TimeUnit.DAYS);
         // 服务器信息缓存更新时间
