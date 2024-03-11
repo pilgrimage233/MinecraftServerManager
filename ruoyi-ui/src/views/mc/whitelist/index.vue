@@ -1,0 +1,481 @@
+<template>
+  <div class="app-container">
+    <el-form v-show="showSearch" ref="queryForm" :inline="true" :model="queryParams" label-width="68px" size="small">
+      <el-form-item label="申请时间" prop="time">
+        <el-date-picker v-model="queryParams.time"
+                        clearable
+                        placeholder="请选择申请时间"
+                        type="date"
+                        value-format="yyyy-MM-dd">
+        </el-date-picker>
+      </el-form-item>
+      <el-form-item label="游戏名称" prop="userName">
+        <el-input
+          v-model="queryParams.userName"
+          clearable
+          placeholder="请输入游戏名称"
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+      <el-form-item label="正版标识" prop="onlineFlag">
+        <el-select v-model="queryParams.onlineFlag" clearable placeholder="正版标识">
+          <el-option
+            v-for="dict in dict.type.online_status"
+            :key="dict.value"
+            :label="dict.label"
+            :value="dict.value"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="用户QQ" prop="qqNum">
+        <el-input
+          v-model="queryParams.qqNum"
+          clearable
+          placeholder="请输入用户QQ"
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+      <el-form-item label="审核用户" prop="reviewUsers">
+        <el-input
+          v-model="queryParams.reviewUsers"
+          clearable
+          placeholder="请输入审核用户"
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+      <el-form-item label="添加状态" prop="addState">
+        <el-select v-model="queryParams.addState" clearable placeholder="添加状态">
+          <el-option
+            v-for="dict in dict.type.white_add_status"
+            :key="dict.value"
+            :label="dict.label"
+            :value="dict.value"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="添加时间" prop="addTime">
+        <el-date-picker v-model="queryParams.addTime"
+                        clearable
+                        placeholder="请选择添加时间"
+                        type="date"
+                        value-format="yyyy-MM-dd">
+        </el-date-picker>
+      </el-form-item>
+      <el-form-item label="移除时间" prop="removeTime">
+        <el-date-picker v-model="queryParams.removeTime"
+                        clearable
+                        placeholder="请选择移除时间"
+                        type="date"
+                        value-format="yyyy-MM-dd">
+        </el-date-picker>
+      </el-form-item>
+      <el-form-item>
+        <el-button icon="el-icon-search" size="mini" type="primary" @click="handleQuery">搜索</el-button>
+        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+      </el-form-item>
+    </el-form>
+
+    <el-row :gutter="10" class="mb8">
+      <el-col :span="1.5">
+        <el-button
+          v-hasPermi="['mc:whitelist:add']"
+          icon="el-icon-plus"
+          plain
+          size="mini"
+          type="primary"
+          @click="handleAdd"
+        >新增
+        </el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          v-hasPermi="['mc:whitelist:edit']"
+          :disabled="single"
+          icon="el-icon-edit"
+          plain
+          size="mini"
+          type="success"
+          @click="handleUpdate"
+        >修改
+        </el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          v-hasPermi="['mc:whitelist:remove']"
+          :disabled="multiple"
+          icon="el-icon-delete"
+          plain
+          size="mini"
+          type="danger"
+          @click="handleDelete"
+        >删除
+        </el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          v-hasPermi="['mc:whitelist:export']"
+          icon="el-icon-download"
+          plain
+          size="mini"
+          type="warning"
+          @click="handleExport"
+        >导出
+        </el-button>
+      </el-col>
+      <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
+    </el-row>
+
+    <el-table v-loading="loading" :data="whitelistList" @selection-change="handleSelectionChange">
+      <el-table-column align="center" type="selection" width="55"/>
+      <el-table-column align="center" label="用户编号" prop="id"/>
+      <el-table-column align="center" label="申请时间" prop="time" width="180">
+        <template slot-scope="scope">
+          <span>{{ parseTime(scope.row.time, '{y}-{m}-{d} {h}:{i}') }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column align="center" label="游戏名称" prop="userName" show-overflow-tooltip/>
+      <el-table-column align="center" label="UUID" prop="userUuid" show-overflow-tooltip/>
+      <el-table-column align="center" label="正版标识" prop="onlineFlag">
+        <template slot-scope="scope">
+          <dict-tag :options="dict.type.online_status" :value="scope.row.onlineFlag"/>
+        </template>
+      </el-table-column>
+      <el-table-column align="center" label="用户QQ" prop="qqNum" show-overflow-tooltip/>
+      <el-table-column align="center" label="描述" prop="remark" show-overflow-tooltip/>
+      <el-table-column align="center" label="审核用户" prop="reviewUsers" show-overflow-tooltip/>
+      <el-table-column align="center" label="审核状态" prop="status">
+        <template slot-scope="scope">
+          <dict-tag :options="dict.type.white_examine_status" :value="scope.row.status"/>
+        </template>
+      </el-table-column>
+      <el-table-column align="center" label="添加状态" prop="addState">
+        <template slot-scope="scope">
+          <dict-tag :options="dict.type.white_add_status" :value="scope.row.addState"/>
+        </template>
+      </el-table-column>
+
+      <el-table-column align="center" label="添加时间" prop="addTime" width="180">
+        <template slot-scope="scope">
+          <span>{{ parseTime(scope.row.addTime, '{y}-{m}-{d} {h}:{i}') }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column align="center" label="移除原因" prop="removeReason"/>
+      <el-table-column align="center" label="移除时间" prop="removeTime" width="180">
+        <template slot-scope="scope">
+          <span>{{ parseTime(scope.row.removeTime, '{y}-{m}-{d} {h}:{i}') }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column align="center" class-name="small-padding fixed-width" label="操作">
+        <template slot-scope="scope">
+          <el-button
+            v-hasPermi="['mc:whitelist:edit']"
+            icon="el-icon-edit"
+            size="mini"
+            type="text"
+            @click="handleUpdate(scope.row)"
+          >修改
+          </el-button>
+          <el-button
+            v-hasPermi="['mc:whitelist:remove']"
+            icon="el-icon-delete"
+            size="mini"
+            type="text"
+            @click="handleDelete(scope.row)"
+          >删除
+          </el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <pagination
+      v-show="total>0"
+      :limit.sync="queryParams.pageSize"
+      :page.sync="queryParams.pageNum"
+      :total="total"
+      @pagination="getList"
+    />
+
+    <!-- 添加或修改白名单对话框 -->
+    <el-dialog :title="title" :visible.sync="open" append-to-body width="500px">
+      <el-form ref="form" :model="form" :rules="rules" label-width="100px" size="medium">
+        <el-form-item label="游戏名称" prop="userName">
+          <el-input v-model="form.userName" :style="{width: '100%'}" clearable placeholder="请输入游戏名称">
+          </el-input>
+        </el-form-item>
+        <el-form-item label="QQ号" prop="qqNum">
+          <el-input v-model="form.qqNum" :style="{width: '100%'}" clearable placeholder="请输入QQ号">
+          </el-input>
+        </el-form-item>
+        <el-form-item label="审核结果" prop="status">
+          <el-radio-group v-model="form.status" size="small">
+            <el-radio v-for="(item, index) in statusOptions" :key="index" :disabled="item.disabled"
+                      :label="item.value">{{ item.label }}
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="服务器" prop="server">
+          <el-select v-model="serverList" multiple placeholder="请选择">
+            <el-option
+              v-for="item in serverOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value">
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="移除白名单" prop="addState">
+          <el-switch v-model="addState"></el-switch>
+        </el-form-item>
+        <el-form-item v-if="addState" label="移除原因" prop="removeReason">
+          <el-input v-model="form.removeReason" :style="{width: '100%'}" clearable placeholder="请输入移除原因">
+          </el-input>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="submitForm">确 定</el-button>
+        <el-button @click="cancel">取 消</el-button>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import {
+  addWhitelist,
+  delWhitelist,
+  getServerList,
+  getWhitelist,
+  listWhitelist,
+  updateWhitelist
+} from "@/api/mc/whitelist";
+import serverlist from "@/views/server/serverlist/index.vue";
+
+export default {
+  name: "Whitelist",
+  computed: {
+    serverlist() {
+      return serverlist
+    }
+  },
+  dicts: ['white_examine_status', 'white_add_status', 'online_status'],
+  data() {
+    return {
+      // 遮罩层
+      loading: true,
+      // 选中数组
+      ids: [],
+      // 非单个禁用
+      single: true,
+      // 非多个禁用
+      multiple: true,
+      // 显示搜索条件
+      showSearch: true,
+      // 总条数
+      total: 0,
+      // 白名单表格数据
+      whitelistList: [],
+      // 弹出层标题
+      title: "",
+      // 是否显示弹出层
+      open: false,
+      addState: false,
+      // 查询参数
+      queryParams: {
+        pageNum: 1,
+        pageSize: 10,
+        time: null,
+        userName: null,
+        userUuid: null,
+        onlineFlag: null,
+        qqNum: null,
+        reviewUsers: null,
+        status: null,
+        addState: null,
+        addTime: null,
+        removeReason: null,
+        removeTime: null
+      },
+      // 表单参数
+      form: {addState: false},
+      // 表单校验
+      rules: {
+        userName: [{
+          required: true,
+          message: '请输入游戏名称',
+          trigger: 'blur'
+        }],
+        qqNum: [{
+          required: true,
+          message: '请输入QQ号',
+          trigger: 'blur'
+        }],
+        removeReason: [],
+        status: [],
+      },
+      statusOptions: [{
+        "label": "通过",
+        "value": 1
+      }, {
+        "label": "拒绝",
+        "value": 2
+      }],
+      servers: [],
+      serverOptions: [], // 服务器列表
+      serverList: []
+    };
+  },
+  created() {
+    this.getList();
+  },
+  methods: {
+    /** 查询白名单列表 */
+    getList() {
+      this.loading = true;
+      listWhitelist(this.queryParams).then(response => {
+        this.whitelistList = response.rows;
+        this.total = response.total;
+        this.loading = false;
+      });
+    },
+    // 取消按钮
+    cancel() {
+      this.open = false;
+      this.reset();
+    },
+    // 表单重置
+    reset() {
+      this.form = {
+        id: null,
+        time: null,
+        userName: null,
+        userUuid: null,
+        onlineFlag: null,
+        qqNum: null,
+        remark: null,
+        reviewUsers: null,
+        status: null,
+        addState: null,
+        addTime: null,
+        removeReason: null,
+        removeTime: null,
+        servers: null
+      };
+      this.resetForm("form");
+    },
+    /** 搜索按钮操作 */
+    handleQuery() {
+      this.queryParams.pageNum = 1;
+      this.getList();
+    },
+    /** 重置按钮操作 */
+    resetQuery() {
+      this.resetForm("queryForm");
+      this.handleQuery();
+    },
+    // 多选框选中数据
+    handleSelectionChange(selection) {
+      this.ids = selection.map(item => item.id)
+      this.single = selection.length !== 1
+      this.multiple = !selection.length
+    },
+    /** 新增按钮操作 */
+    handleAdd() {
+      this.reset();
+      this.open = true;
+      this.title = "添加白名单";
+    },
+    /** 修改按钮操作 */
+    handleUpdate(row) {
+      this.reset();
+      this.serverOptions = [{label: "全部", value: "all"}];
+      this.serverList = [];
+      this.handleServerList();
+      const id = row.id || this.ids
+      getWhitelist(id).then(response => {
+        this.form = response.data;
+        this.open = true;
+        this.title = "修改白名单";
+        if (this.form.addState === '2') {
+          this.addState = true;
+        }
+        // 回显审核状态
+        this.form.status = this.form.status === '1' ? 1 : 2;
+        // 根据servers字段回显服务器列表
+        if (this.form.servers !== null) {
+          const split = this.form.servers.split(",");
+          split.forEach((item) => {
+            this.serverOptions.forEach((option) => {
+              if (option.value == item) {
+                this.serverList.push(option.value);
+              }
+            });
+          });
+        }
+      });
+    },
+    /** 提交按钮 */
+    submitForm() {
+      this.$refs["form"].validate(valid => {
+        if (valid) {
+          // 白名单服务器列表
+          if (this.serverList.includes("all")) {
+            this.form.servers = this.serverOptions.map(item => item.value).join(",");
+          } else {
+            this.form.servers = this.serverList.join(",");
+          }
+          if (this.form.id != null) {
+            this.form.addState = this.addState;
+            updateWhitelist(this.form).then(response => {
+              this.$modal.msgSuccess("修改成功");
+              this.open = false;
+              this.getList();
+            });
+          } else {
+            addWhitelist(this.form).then(response => {
+              this.$modal.msgSuccess("新增成功");
+              this.open = false;
+              this.getList();
+            });
+          }
+        }
+      });
+    },
+    /** 删除按钮操作 */
+    handleDelete(row) {
+      const ids = row.id || this.ids;
+      this.$modal.confirm('是否确认删除白名单编号为"' + ids + '"的数据项？').then(function () {
+        return delWhitelist(ids);
+      }).then(() => {
+        this.getList();
+        this.$modal.msgSuccess("删除成功");
+      }).catch(() => {
+      });
+    },
+    /** 导出按钮操作 */
+    handleExport() {
+      this.download('mc/whitelist/export', {
+        ...this.queryParams
+      }, `whitelist_${new Date().getTime()}.xlsx`)
+    },
+    /** 服务器列表 */
+    handleServerList() {
+      getServerList().then(response => {
+        let date = response.data;
+        date.forEach((item) => {
+          if (item.status === 1) {
+            this.serverOptions.push({label: item.nameTag, value: item.id});
+          }
+        });
+      });
+    }
+  },
+  watch: {
+    open(val) {
+      if (!val) {
+        this.reset();
+        this.addState = false;
+      }
+    }
+  }
+};
+</script>
